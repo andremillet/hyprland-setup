@@ -1,19 +1,7 @@
 #!/bin/bash
 #
-# Script v8: Pós-instalação Arch Linux + Hyprland
-#
-# SÍNTESE (v8):
-# - (v8) Adicionado 'nvidia-settings' para controle gráfico da NVIDIA.
-# - (v8) 'rust'/'cargo' trocados por 'rustup' (padrão de dev).
-# - (v8) Adicionado prompt pós-instalação para 'rustup'.
-#
-# - (v7) Correção: Sintaxe do 'if' no systemd-boot.
-# - (v7) Correção: 'ulauncher --toggle-window'.
-# - (v7) Correção: 'sed' robusto para o GRUB.
-# - (v7) Correção: Removido 'egl-wayland'.
-#
-# - (Base) Sudo "keep-alive", detecção de NVIDIA, pacotes de áudio/screenshot,
-#   idioma en_US, driver nvidia-dkms, hyprland.conf completo.
+# Script v9: Pós-instalação Arch Linux + Hyprland
+# Otimizado para execução automática NÃO-INTERATIVA via archinstall
 #
 
 set -e
@@ -29,23 +17,22 @@ NC="\033[0m"
 msg() { echo -e "${BLUE}[*]${NC} $1"; }
 success() { echo -e "${GREEN}[+]${NC} $1"; }
 warning() { echo -e "${YELLOW}[!]${NC} $1"; }
-error() {
-    echo -e "${RED}[-]${NC} $1"
-    exit 1
+error() { echo -e "${RED}[-]${NC} $1"; exit 1; }
+
+# --- v9: Limpeza de Segurança ---
+# Esta função é chamada no final do script (com sucesso ou falha)
+# para remover o acesso sudo NOPASSWD.
+cleanup_sudo() {
+    msg "Restaurando segurança do sudo..."
+    sudo rm -f /etc/sudoers.d/10-*-setup
+    success "Configuração NOPASSWD removida."
 }
+trap cleanup_sudo EXIT
+# ------------------------------
 
-if [ "$EUID" -eq 0 ]; then
-    error "Este script NÃO deve ser executado como root. Rode como seu usuário normal."
-fi
-
-# Solicitar senha sudo no início
-sudo -v
-msg "Mantendo o 'sudo' vivo a cada 60s..."
-while true; do
-    sudo -n true
-    sleep 60
-    kill -0 "$$" || exit
-done 2>/dev/null &
+# --- v9: Loop sudo -v REMOVIDO (desnecessário) ---
+msg "Iniciando setup (v9) não-interativo..."
+msg "Privilégios de Sudo fornecidos por 'post_install_wrapper.sh'"
 
 # --- 1. Instalação do AUR Helper (yay) ---
 setup_aur_helper() {
@@ -55,6 +42,7 @@ setup_aur_helper() {
         cd /tmp
         git clone https://aur.archlinux.org/yay.git
         cd yay
+        # Executa makepkg como o utilizador atual (não root)
         makepkg -si --noconfirm
         cd
         success "yay instalado."
@@ -63,62 +51,53 @@ setup_aur_helper() {
     fi
 }
 
-# --- 2. Configuração de Localidade ---
-setup_locale() {
-    msg "Configurando idioma do sistema para Inglês (en_US.UTF-8)..."
-    if ! grep -q "^en_US.UTF-8 UTF-8" /etc/locale.gen; then
-        sudo sed -i '/^#en_US.UTF-8 UTF-8/s/^#//' /etc/locale.gen
-    fi
-    sudo locale-gen
-    echo "LANG=en_US.UTF-8" | sudo tee /etc/locale.conf
-    success "Idioma do sistema definido como en_US.UTF-8."
-}
+# --- 2. Localidade REMOVIDA (agora no install.json) ---
 
 # --- 3. Instalação do Ambiente Básico ---
 setup_base() {
     msg "Instalando ambiente Hyprland e utilitários essenciais..."
+    # 'pipewire' e 'networkmanager' já vêm do install.json
+    # Apenas instalamos os extras aqui.
     PACMAN_PACKAGES=(
         hyprland waybar alacritty
         thunar thunar-archive-plugin tumbler
-        networkmanager network-manager-applet
+        network-manager-applet
         bluez bluez-utils blueman
         ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji
         polkit-kde-agent qt5-wayland qt6-wayland
         xdg-desktop-portal-hyprland xdg-utils
         cliphist swaybg brightnessctl slurp grim
-        pipewire pipewire-pulse pipewire-alsa wireplumber
+        pipewire-pulse pipewire-alsa wireplumber
     )
     sudo pacman -Syu --noconfirm "${PACMAN_PACKAGES[@]}"
     
-    sudo systemctl enable NetworkManager
+    sudo systemctl enable NetworkManager # Habilita (json só instalou)
     sudo systemctl enable bluetooth
     success "Ambiente básico instalado."
 }
 
-# --- 4. Configuração de Pacotes NVIDIA (CORRIGIDO v8) ---
+# --- 4. Configuração de Pacotes NVIDIA ---
 setup_nvidia_pkgs() {
     if lspci | grep -i nvidia &> /dev/null; then
         msg "GPU NVIDIA detectada. Instalando drivers 'dkms' e 'settings'..."
-        # v8: Adicionado 'nvidia-settings'
-        sudo pacman -S --noconfirm nvidia-dkms linux-headers libva-nvidia-driver nvidia-settings
+        # 'linux-headers' já vêm do install.json
+        sudo pacman -S --noconfirm nvidia-dkms libva-nvidia-driver nvidia-settings
         success "Drivers NVIDIA (dkms) e painel de controle instalados."
     else
         msg "GPU NVIDIA não detectada. Pulando instalação de drivers."
     fi
 }
 
-# --- 5. Configuração do Ambiente de Desenvolvimento (CORRIGIDO v8) ---
+# --- 5. Configuração do Ambiente de Desenvolvimento ---
 setup_dev_env() {
     msg "Instalando ambiente de desenvolvimento (Python, Docker, Rust, Go)..."
-    
-    # v8: 'rust' e 'cargo' trocados por 'rustup'
     PACMAN_DEV=(
         python python-pip python-venv
         docker docker-compose
         git
         nodejs npm
         go
-        rustup # Pacotes 'rust' e 'cargo' removidos
+        rustup
     )
     sudo pacman -S --noconfirm "${PACMAN_DEV[@]}"
     
@@ -133,15 +112,11 @@ setup_dev_env() {
     
     success "Ambiente de desenvolvimento instalado."
     
-    # Lógica do CUDA
+    # --- v9: Instalação do CUDA NÃO-INTERATIVA ---
     if lspci | grep -i nvidia &> /dev/null; then
-        read -p "NVIDIA detectada. Deseja instalar o toolkit CUDA (LLM)? [s/N]: " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Ss]$ ]]; then
-            msg "Instalando CUDA e CUDNN..."
-            sudo pacman -S --noconfirm cuda cudnn
-            success "CUDA instalado."
-        fi
+        msg "NVIDIA detectada. Instalando CUDA e CUDNN automaticamente..."
+        sudo pacman -S --noconfirm cuda cudnn
+        success "CUDA instalado."
     fi
 }
 
@@ -159,7 +134,7 @@ setup_apps() {
     success "Aplicações instaladas."
 }
 
-# --- 7. Configuração Automática de Sistema (Lógica v7) ---
+# --- 7. Configuração Automática de Sistema ---
 configure_system() {
     msg "Iniciando configuração automática do sistema..."
 
@@ -184,8 +159,9 @@ EOF
 
     if [ ! -s "$HYPR_CONFIG_FILE" ]; then
         msg "hyprland.conf está vazio. Criando configuração rica..."
+        # (A configuração do hyprland.conf v8 vai aqui...)
         cat <<EOF > "$HYPR_CONFIG_FILE"
-#--- Configuração Básica Automática (Script v8) ---
+#--- Configuração Básica Automática (Script v9) ---
 source = $ENV_VAR_FILE
 monitor=,preferred,auto,1
 exec-once = waybar
@@ -283,7 +259,7 @@ EOF
         fi
     fi
 
-    # Configuração do Bootloader para NVIDIA (Lógica v7)
+    # Configuração do Bootloader para NVIDIA
     if lspci | grep -i nvidia &> /dev/null; then
         msg "Configurando Bootloader para NVIDIA..."
         
@@ -312,68 +288,31 @@ EOF
             
             if ! grep -q "nvidia_drm.modeset=1" /etc/default/grub; then
                 sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*/& nvidia_drm.modeset=1/' /etc/default/grub
-                msg "Parâmetro 'nvidia_drm.modeset=1' adicionado ao /etc/default/grub."
-            else
-                msg "Parâmetro do kernel NVIDIA já existe no /etc/default/grub."
             fi
-            
             sudo grub-mkconfig -o /boot/grub/grub.cfg
             success "GRUB atualizado."
         else
             warning "Não foi possível detectar GRUB ou systemd-boot."
-            warning "AÇÃO MANUAL NECESSÁRIA: Adicione 'nvidia_drm.modeset=1' aos parâmetros do kernel."
         fi
     fi
 }
 
-# --- 8. Prompt Pós-Instalação (CORRIGIDO v8) ---
+# --- 8. Prompt Pós-Instalação (NÃO INTERATIVO) ---
 post_install_prompts() {
-    success "Instalação principal concluída!"
-    msg "--- AÇÕES MANUAIS OBRIGATÓRIAS ---"
+    success "Instalação principal (v9) concluída!"
+    msg "O sistema está quase pronto."
+    msg "A limpeza do sudo será executada agora."
+    msg "O wrapper irá limpar o .bash_profile."
     
-    echo -e "\n${GREEN}1. Rclone (Google Drive):${NC}"
-    echo "   Rode o comando abaixo para configurar sua conta (requer navegador):"
-    echo "   ${YELLOW}rclone config${NC}"
-    
-    echo -e "\n${GREEN}2. 1Password:${NC}"
-    echo "   Abra o app 1Password ou rode no terminal para fazer login:"
-    echo "   ${YELLOW}op signin${NC}"
-
-    echo -e "\n${GREEN}3. Docker:${NC}"
-    echo "   Você DEVE reiniciar (ou fazer logoff) para usar o Docker sem 'sudo'."
-
-    # v8: Novo prompt para Rustup
-    echo -e "\n${GREEN}4. Rust (rustup):${NC}"
-    echo "   O gerenciador 'rustup' está instalado. Para instalar o Rust, rode:"
-    echo "   ${YELLOW}rustup toolchain install stable${NC}"
-
-    # Re-numerado
-    echo -e "\n${GREEN}5. Ulauncher:${NC}"
-    echo "   Após reiniciar, aperte 'Super + Espaço'. Na primeira vez,"
-    echo "   o Ulauncher pedirá para configurar o tema (recomendo 'Adwaita Dark')."
-    
-    # Re-numerado
-    echo -e "\n${GREEN}6. Wallpaper:${NC}"
-    echo "   Edite '~/.config/hypr/hyprland.conf' e descomente a linha 'exec-once = swaybg ...'"
-    echo "   com o caminho para sua imagem preferida."
-
-    echo -e "\n--------------------------------------------------------"
-    
-    read -p "REINICIAR é necessário. Deseja reiniciar agora? [s/N]: " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Ss]$ ]]; then
-        msg "Reiniciando o sistema em 3 segundos..."
-        sleep 3
-        sudo reboot
-    else
-        msg "OK. Lembre-se de reiniciar manualmente."
-    fi
+    # v9: REBOOT AUTOMÁTICO
+    msg "O sistema será reiniciado em 10 segundos para finalizar."
+    sleep 10
+    sudo reboot
 }
 
 # --- Execução Principal ---
 main() {
     setup_aur_helper
-    setup_locale
     setup_base
     setup_nvidia_pkgs
     setup_dev_env

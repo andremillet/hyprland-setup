@@ -1,0 +1,33 @@
+{
+    "__separator__": "Hyprland Personal Setup (v9)",
+    "hostname": "madara",
+    "username": "woulschneider",
+    "password": "",
+    "profile": "minimal",
+    "kernels": ["linux", "linux-headers"],
+    "timezone": "America/Sao_Paulo",
+    "locale": "en_US.UTF-8",
+    "keyboard-layout": "br",
+    "bootloader": "systemd-boot",
+    "swap": true,
+    "disk_layout": {
+        "__config_type__": "default_layout",
+        "layout_type": "BestCase",
+        "target_disk": "/dev/nvme0n1",
+        "filesystem": "btrfs",
+        "wipe": true,
+        "encryption": {
+            "encryption_password": "",
+            "encryption_type": "luks"
+        }
+    },
+    "packages": ["git", "curl", "wget"],
+    "script": "post_install_wrapper.sh",
+    "repo": "https://raw.githubusercontent.com/andremillet/hyprland_setup/main",
+    "nic": {
+        "type": "nm"
+    },
+    "audio": {
+        "server": "pipewire"
+    }
+}
