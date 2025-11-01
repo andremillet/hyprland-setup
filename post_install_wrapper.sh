@@ -9,7 +9,7 @@ set -e
 
 # --- CONFIGURAÇÃO (MUDE ISTO) ---
 USERNAME="woulschneider"
-REPO_URL="https://raw.githubusercontent.com/andremillet/hyprland_setup/main"
+REPO_URL="https://raw.githubusercontent.com/andremillet/hyprland-setup/main"
 SETUP_SCRIPT="setup.sh"
 # --- FIM CONFIGURAÇÃO ---
 

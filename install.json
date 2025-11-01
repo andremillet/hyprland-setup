@@ -23,7 +23,7 @@
     },
     "packages": ["git", "curl", "wget"],
     "script": "post_install_wrapper.sh",
-    "repo": "https://raw.githubusercontent.com/andremillet/hyprland_setup/main",
+    "repo": "https://raw.githubusercontent.com/andremillet/hyprland-setup/main",
     "nic": {
         "type": "nm"
     },
