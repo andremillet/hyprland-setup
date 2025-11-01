@@ -32,10 +32,11 @@ Após o primeiro boot na instalação limpa, execute os comandos abaixo no termi
 
 ```bash
 # 1. Baixa o script para o diretório atual
-curl -O [https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/setup.sh](https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/setup.sh)
+curl -O [https://raw.githubusercontent.com/andremillet/hyprland_setup/main/setup.sh](https://raw.githubusercontent.com/andremillet/hyprland_setup/main/setup.sh)
 
 # 2. Concede permissão de execução
 chmod +x setup.sh
 
 # 3. Executa o script (será solicitada a senha do sudo)
+
 ./setup.sh
