@@ -1,34 +1,34 @@
 {
-    "__separator__": "Hyprland Personal Setup (v10)",
-    "hostname": "madara",
-    "username": "woulschneider",
-    "password": "",
+    "__separator__": "Hyprland Personal Setup (v12)",
+    "hostname": "arch-hypr",
+    "username": "seu_usuario_aqui",
+    "password": "", 
     "profile": "minimal",
     "kernels": ["linux", "linux-headers"],
     "timezone": "America/Sao_Paulo",
     "locale": "en_US.UTF-8",
-    "keyboard-layout": "br",
+    "keyboard-layout": "br", 
     "bootloader": "systemd-boot",
     "swap": true,
     "disk_layout": {
         "__config_type__": "default_layout",
         "layout_type": "BestCase",
-        "target_disk": "/dev/nvme0n1",
+        "target_disk": "/dev/nvme0n1", 
         "filesystem": "btrfs",
         "wipe": true,
         "encryption": {
-            "encryption_password": "",
+            "encryption_password": "", 
             "encryption_type": "luks"
         }
     },
-    "packages": ["git", "curl", "wget"],
+    "packages": ["git", "curl", "wget", "networkmanager", "dialog"],
     "nic": {
         "type": "nm"
     },
     "audio": {
         "server": "pipewire"
     },
-
+    
     "repo": null,
     "script": null,
 
@@ -38,8 +38,6 @@
         "chmod +x /tmp/post_install_wrapper.sh",
         "echo 'Executando o wrapper de pós-instalação...'",
         "/tmp/post_install_wrapper.sh",
-        "echo 'Wrapper executado, limpando...'",
-        "rm /tmp/post_install_wrapper.sh",
         "echo 'Comandos de pós-instalação concluídos.'"
     ]
 }
