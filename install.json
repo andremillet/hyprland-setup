@@ -1,5 +1,5 @@
 {
-    "__separator__": "Hyprland Personal Setup (v9)",
+    "__separator__": "Hyprland Personal Setup (v10)",
     "hostname": "madara",
     "username": "woulschneider",
     "password": "",
@@ -22,12 +22,24 @@
         }
     },
     "packages": ["git", "curl", "wget"],
-    "script": "post_install_wrapper.sh",
-    "repo": "https://raw.githubusercontent.com/andremillet/hyprland-setup/main",
     "nic": {
         "type": "nm"
     },
     "audio": {
         "server": "pipewire"
-    }
+    },
+
+    "repo": null,
+    "script": null,
+
+    "post_install_commands": [
+        "echo 'Baixando o wrapper de pós-instalação...'",
+        "curl -fsSL -o /tmp/post_install_wrapper.sh https://raw.githubusercontent.com/andremillet/hyprland-setup/main/post_install_wrapper.sh",
+        "chmod +x /tmp/post_install_wrapper.sh",
+        "echo 'Executando o wrapper de pós-instalação...'",
+        "/tmp/post_install_wrapper.sh",
+        "echo 'Wrapper executado, limpando...'",
+        "rm /tmp/post_install_wrapper.sh",
+        "echo 'Comandos de pós-instalação concluídos.'"
+    ]
 }
