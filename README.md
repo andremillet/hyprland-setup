@@ -1,42 +1,38 @@
-# 🚀 Arch Hyprland Setup (v8)
+# 🚀 Arch Hyprland Automated Installer (v9)
 
-Este repositório contém o script de pós-instalação (`setup.sh`) para configurar rapidamente um ambiente de desenvolvimento robusto no Arch Linux, utilizando o **Hyprland** (um moderno *tiling window manager* Wayland) com otimizações para **NVIDIA** e ferramentas essenciais de produtividade/LLM.
+Este repositório contém os ficheiros de configuração para instalar e configurar automaticamente um ambiente de desenvolvimento robusto no Arch Linux, utilizando o **Hyprland** (um moderno *tiling window manager* Wayland), com otimizações para **NVIDIA** e um fluxo de instalação **totalmente automatizado** via `archinstall`.
 
-O script automatiza a instalação de drivers, gerenciadores de pacotes (yay), e configurações básicas para um desktop funcional com teclado **ABNT** e idioma do sistema em **Inglês (`en_US.UTF-8`)**.
+O seu "installer" pessoal consiste em três ficheiros que trabalham juntos para criar um ambiente *zero-touch* (sem intervenção humana durante a instalação e primeiro login).
 
-## ✨ Funcionalidades do Script
+## ✨ Funcionalidades do Ambiente
 
 * **Ambiente:** Hyprland, Waybar, Alacritty (Terminal), Thunar (Gerenciador de Arquivos).
-* **Drivers:** Instalação robusta de `nvidia-dkms`, `linux-headers`, `libva-nvidia-driver` e `nvidia-settings`, com detecção automática do hardware e configuração do bootloader (GRUB ou systemd-boot).
-* **Produtividade:** Instalação de 1Password, Brave Browser, ZapZap (Cliente WhatsApp).
-* **Ferramentas:** Rclone, Pipewire (Áudio), Grim/Slurp (Screenshots), Brightnessctl.
-* **Desenvolvimento:** Python, Docker, Go, **Rustup** (toolchain manager), VS Code (open-source bin).
+* **Drivers:** Instalação robusta de `nvidia-dkms`, `nvidia-settings`, com detecção automática do hardware e configuração do bootloader (GRUB ou systemd-boot).
+* **Produtividade:** 1Password, Brave Browser, ZapZap (Cliente WhatsApp), Rclone.
+* **Ferramentas:** Pipewire (Áudio), Grim/Slurp (Screenshots), Brightnessctl.
+* **Desenvolvimento:** Python, Docker, Go, **Rustup** (toolchain manager), VS Code.
 * **Launcher:** Configuração do `ulauncher` (estilo Pop!\_OS/Spotlight) com atalho **`Super + Espaço`**.
-* **Configuração Inicial:** Cria um arquivo `~/.config/hypr/hyprland.conf` funcional com layout ABNT.
+* **Localização:** Teclado **ABNT** e idioma do sistema **Inglês (`en_US.UTF-8`)**.
 
-## 📋 Pré-requisitos
+---
 
-1.  Uma instalação limpa do **Arch Linux**.
-2.  Um usuário não-root configurado com privilégios `sudo`.
-3.  Conexão ativa com a internet.
+## ⚙️ Arquitetura do Instalador
 
-## 💻 Guia de Pós-Instalação Rápida
+Este processo usa três ficheiros:
+1.  **`install.json`:** O ficheiro de configuração do `archinstall`. Define o particionamento, o `timezone` (`America/Sao_Paulo`) e os pacotes base.
+2.  **`post_install_wrapper.sh`:** Executado pelo `archinstall` (como `root`). Prepara o ambiente, configura acesso `sudo NOPASSWD` temporário e "arma" o `setup.sh` para ser executado no primeiro login.
+3.  **`setup.sh` (v9):** O script principal, agora **NÃO INTERATIVO**. Instala o Hyprland, as aplicações, e remove o acesso `sudo NOPASSWD` no final.
 
-O fluxo recomendado é instalar a base com o `archinstall --minimal` e, em seguida, executar este script como seu usuário normal.
+## 🚀 Guia de Instalação (Zero-Touch)
 
-### 1. Clonar e Executar
+O processo de instalação é resumido a apenas três comandos no ambiente "live" do Arch.
 
-Após o primeiro boot na instalação limpa, execute os comandos abaixo no terminal (o `wget` é geralmente incluído no `archinstall --minimal`, mas o `curl` também pode ser usado):
+### 1. Preparação (No Live USB)
 
-**Usando `curl`:**
+1.  Arranque o computador com o **Arch Linux Live USB**.
+2.  Conecte-se à internet (usando `iwctl` ou `dhcpcd`).
+3.  Baixe o ficheiro de configuração `install.json`:
 
 ```bash
-# 1. Baixa o script para o diretório atual
-curl -O [https://raw.githubusercontent.com/andremillet/hyprland_setup/main/setup.sh](https://raw.githubusercontent.com/andremillet/hyprland_setup/main/setup.sh)
-
-# 2. Concede permissão de execução
-chmod +x setup.sh
-
-# 3. Executa o script (será solicitada a senha do sudo)
-
-./setup.sh
+# Baixa o ficheiro JSON
+curl -O [https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/install.json](https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/install.json)
