@@ -35,4 +35,5 @@ O processo de instalação é resumido a apenas três comandos no ambiente "live
 
 ```bash
 # Baixa o ficheiro JSON
-curl -O [https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/install.json](https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/install.json)
+
+curl -O [https://raw.githubusercontent.com/andremillet/hyprland_setup/main/install.json](https://raw.githubusercontent.com/andremillet/hyprland_setup/main/install.json)
