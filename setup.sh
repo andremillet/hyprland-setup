@@ -1,324 +1,232 @@
+---
+
+### 2. O `setup.sh` 
+
+Este é o script que o `curl` irá descarregar. 
+
+```bash
 #!/bin/bash
 #
-# Script v9: Pós-instalação Arch Linux + Hyprland
-# Otimizado para execução automática NÃO-INTERATIVA via archinstall
+# SCRIPT DE PÓS-INSTALAÇÃO
+# EXECUTAR COMO UTILIZADOR NORMAL (./setup.sh) - NÃO USAR 'sudo'
 #
 
-set -e
-
-# Cores
+# --- Funções de Log ---
 BLUE="\033[1;34m"
 GREEN="\033[1;32m"
-YELLOW="\033[1;33m"
 RED="\033[1;31m"
+YELLOW="\033[1;33m"
 NC="\033[0m"
-
-# Funções de log
 msg() { echo -e "${BLUE}[*]${NC} $1"; }
 success() { echo -e "${GREEN}[+]${NC} $1"; }
 warning() { echo -e "${YELLOW}[!]${NC} $1"; }
-error() { echo -e "${RED}[-]${NC} $1"; exit 1; }
+error() { echo -e "${RED}[!]${NC} $1"; }
 
-# --- v9: Limpeza de Segurança ---
-# Esta função é chamada no final do script (com sucesso ou falha)
-# para remover o acesso sudo NOPASSWD.
-cleanup_sudo() {
-    msg "Restaurando segurança do sudo..."
-    sudo rm -f /etc/sudoers.d/10-*-setup
-    success "Configuração NOPASSWD removida."
+# --- Pedir sudo no início e manter vivo ---
+msg "A pedir privilégios de sudo para a instalação..."
+sudo -v
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
+# --- 1. CONFIGURAR REDE (Habilitar o que foi instalado) ---
+setup_network() {
+    msg "A habilitar o NetworkManager para arranques futuros..."
+    sudo systemctl enable NetworkManager
+    success "NetworkManager habilitado."
 }
-trap cleanup_sudo EXIT
-# ------------------------------
 
-# --- v9: Loop sudo -v REMOVIDO (desnecessário) ---
-msg "Iniciando setup (v9) não-interativo..."
-msg "Privilégios de Sudo fornecidos por 'post_install_wrapper.sh'"
-
-# --- 1. Instalação do AUR Helper (yay) ---
-setup_aur_helper() {
+# --- 2. CONFIGURAR YAY (AUR HELPER) ---
+setup_yay() {
     msg "Configurando o AUR Helper (yay)..."
     if ! command -v yay &> /dev/null; then
-        sudo pacman -S --needed --noconfirm base-devel git
-        cd /tmp
-        git clone https://aur.archlinux.org/yay.git
-        cd yay
-        # Executa makepkg como o utilizador atual (não root)
-        makepkg -si --noconfirm
-        cd
+        msg "A instalar 'base-devel' para compilar o yay..."
+        sudo pacman -S --noconfirm base-devel
+        
+        msg "A clonar e compilar o yay (Executando 'makepkg' como $USER)..."
+        # Executa como utilizador (não root), pedindo sudo internamente quando necessário.
+        (
+            git clone https://aur.archlinux.org/yay.git /tmp/yay &&
+            cd /tmp/yay &&
+            makepkg -si --noconfirm &&
+            cd ~ &&
+            rm -rf /tmp/yay
+        )
         success "yay instalado."
     else
         success "yay já está instalado."
     fi
 }
 
-# --- 2. Localidade REMOVIDA (agora no install.json) ---
-
-# --- 3. Instalação do Ambiente Básico ---
-setup_base() {
-    msg "Instalando ambiente Hyprland e utilitários essenciais..."
-    # 'pipewire' e 'networkmanager' já vêm do install.json
-    # Apenas instalamos os extras aqui.
-    PACMAN_PACKAGES=(
-        hyprland waybar alacritty
-        thunar thunar-archive-plugin tumbler
-        network-manager-applet
-        bluez bluez-utils blueman
-        ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji
-        polkit-kde-agent qt5-wayland qt6-wayland
-        xdg-desktop-portal-hyprland xdg-utils
-        cliphist swaybg brightnessctl slurp grim
-        pipewire-pulse pipewire-alsa wireplumber
+# --- 3. AMBIENTE DE BASE (HYPRLAND, ÁUDIO, FONTES) ---
+setup_base_env() {
+    msg "Instalando ambiente de base (Hyprland, Waybar, Alacritty, Áudio)..."
+    # linux-headers (para NVIDIA) e ferramentas de screenshot/áudio
+    local PACMAN_PACKAGES=(
+        hyprland waybar alacritty wofi thunar
+        linux-headers
+        pipewire pipewire-pulse pipewire-alsa wireplumber
+        polkit-kde-agent
+        ttf-jetbrains-mono-nerd noto-fonts-emoji
+        brightnessctl grim slurp
     )
-    sudo pacman -Syu --noconfirm "${PACMAN_PACKAGES[@]}"
-    
-    sudo systemctl enable NetworkManager # Habilita (json só instalou)
-    sudo systemctl enable bluetooth
-    success "Ambiente básico instalado."
+    sudo pacman -S --noconfirm "${PACMAN_PACKAGES[@]}"
+    success "Ambiente de base instalado."
 }
 
-# --- 4. Configuração de Pacotes NVIDIA ---
-setup_nvidia_pkgs() {
+# --- 4. DRIVERS NVIDIA (CONDICIONAL) ---
+setup_nvidia() {
     if lspci | grep -i nvidia &> /dev/null; then
-        msg "GPU NVIDIA detectada. Instalando drivers 'dkms' e 'settings'..."
-        # 'linux-headers' já vêm do install.json
+        msg "Placa NVIDIA detetada. A instalar drivers DKMS..."
         sudo pacman -S --noconfirm nvidia-dkms libva-nvidia-driver nvidia-settings
-        success "Drivers NVIDIA (dkms) e painel de controle instalados."
-    else
-        msg "GPU NVIDIA não detectada. Pulando instalação de drivers."
-    fi
-}
-
-# --- 5. Configuração do Ambiente de Desenvolvimento ---
-setup_dev_env() {
-    msg "Instalando ambiente de desenvolvimento (Python, Docker, Rust, Go)..."
-    PACMAN_DEV=(
-        python python-pip python-venv
-        docker docker-compose
-        git
-        nodejs npm
-        go
-        rustup
-    )
-    sudo pacman -S --noconfirm "${PACMAN_DEV[@]}"
-    
-    AUR_DEV=(
-        visual-studio-code-bin
-    )
-    yay -S --noconfirm "${AUR_DEV[@]}"
-    
-    msg "Configurando Docker..."
-    sudo systemctl enable docker
-    sudo usermod -aG docker "$USER"
-    
-    success "Ambiente de desenvolvimento instalado."
-    
-    # --- v9: Instalação do CUDA NÃO-INTERATIVA ---
-    if lspci | grep -i nvidia &> /dev/null; then
-        msg "NVIDIA detectada. Instalando CUDA e CUDNN automaticamente..."
-        sudo pacman -S --noconfirm cuda cudnn
-        success "CUDA instalado."
-    fi
-}
-
-# --- 6. Aplicações de Produtividade ---
-setup_apps() {
-    msg "Instalando aplicações (1Password, Brave, ZapZap, Ulauncher)..."
-    sudo pacman -S --noconfirm rclone
-    AUR_APPS=(
-        1password 1password-cli
-        brave-bin
-        zapzap-bin
-        ulauncher-bin
-    )
-    yay -S --noconfirm "${AUR_APPS[@]}"
-    success "Aplicações instaladas."
-}
-
-# --- 7. Configuração Automática de Sistema ---
-configure_system() {
-    msg "Iniciando configuração automática do sistema..."
-
-    local HYPR_CONFIG_DIR="$HOME/.config/hypr"
-    local HYPR_CONFIG_FILE="$HYPR_CONFIG_DIR/hyprland.conf"
-    local ENV_VAR_FILE="$HYPR_CONFIG_DIR/env-vars.conf"
-    local ENV_VAR_LINE="source = $ENV_VAR_FILE"
-
-    mkdir -p "$HYPR_CONFIG_DIR"
-    touch "$HYPR_CONFIG_FILE"
-
-    if lspci | grep -i nvidia &> /dev/null; then
-        msg "Criando env-vars.conf para NVIDIA..."
-        cat <<EOF > "$ENV_VAR_FILE"
+        
+        msg "A criar ficheiro de variáveis de ambiente NVIDIA..."
+        mkdir -p ~/.config/hypr
+        cat <<EOF > ~/.config/hypr/env-vars.conf
 # Variáveis de ambiente para NVIDIA
 env = LIBVA_DRIVER_NAME,nvidia
 env = GBM_BACKEND,nvidia-drm
 env = __GLX_VENDOR_LIBRARY_NAME,nvidia
 env = WLR_NO_HARDWARE_CURSORS,1
 EOF
+        success "Drivers NVIDIA e variáveis de ambiente configurados."
+    else
+        warning "Nenhuma placa NVIDIA detetada. A ignorar instalação de drivers."
     fi
+}
 
-    if [ ! -s "$HYPR_CONFIG_FILE" ]; then
-        msg "hyprland.conf está vazio. Criando configuração rica..."
-        # (A configuração do hyprland.conf v8 vai aqui...)
-        cat <<EOF > "$HYPR_CONFIG_FILE"
-#--- Configuração Básica Automática (Script v9) ---
-source = $ENV_VAR_FILE
+# --- 5. AMBIENTE DE DESENVOLVIMENTO (CORRIGIDO) ---
+setup_dev_env() {
+    msg "Instalando ambiente de desenvolvimento (Python, Docker, Rust, Go)..."
+    
+    # CORRIGIDO: 'python-venv' -> 'python-virtualenv'
+    local PACMAN_DEV=(
+        python-pip 
+        python-virtualenv
+        docker 
+        docker-compose
+        nodejs 
+        npm 
+        go 
+        rustup
+    )
+    sudo pacman -S --noconfirm "${PACMAN_DEV[@]}"
+    
+    msg "A configurar Docker..."
+    sudo systemctl enable docker
+    sudo usermod -aG docker "$USER"
+    
+    if lspci | grep -i nvidia &> /dev/null; then
+        msg "A instalar CUDA e CUDNN para NVIDIA..."
+        sudo pacman -S --noconfirm cuda cudnn
+    fi
+    success "Ambiente de desenvolvimento instalado."
+}
+
+# --- 6. APLICAÇÕES (NOMES CORRIGIDOS) ---
+setup_apps() {
+    msg "Instalando aplicações do AUR (VSCode, 1Password, Brave, Ulauncher, ZapZap)..."
+    
+    # CORRIGIDO: Nomes de pacotes
+    yay -S --noconfirm visual-studio-code-bin || error "Falha ao instalar VSCode"
+    yay -S --noconfirm 1password || error "Falha ao instalar 1Password"
+    yay -S --noconfirm brave-bin || error "Falha ao instalar Brave"
+    yay -S --noconfirm ulauncher || error "Falha ao instalar Ulauncher"
+    yay -S --noconfirm zapzap || error "Falha ao instalar ZapZap"
+    
+    sudo pacman -S --noconfirm rclone || error "Falha ao instalar Rclone"
+    
+    success "Aplicações instaladas."
+}
+
+# --- 7. CONFIGURAR HYPRLAND (O V12 FUNCIONAL) ---
+configure_hyprland() {
+    msg "A aplicar a configuração funcional v12 do Hyprland..."
+    local HYPR_CONFIG_DIR="$HOME/.config/hypr"
+    local HYPR_CONFIG_FILE="$HYPR_CONFIG_DIR/hyprland.conf"
+    mkdir -p "$HYPR_CONFIG_DIR"
+
+    # Escreve o ficheiro de configuração (sobrescreve qualquer fallback)
+    cat <<EOF > "$HYPR_CONFIG_FILE"
+# --- Configuração v12 (Funcional e Corrigida) ---
+
+# Carrega as variáveis da NVIDIA (APENAS SE O FICHEIRO EXISTIR)
+$(if [ -f "$HYPR_CONFIG_DIR/env-vars.conf" ]; then echo "source = $HYPR_CONFIG_DIR/env-vars.conf"; fi)
+
+# Monitor
 monitor=,preferred,auto,1
-exec-once = waybar
-exec-once = /usr/lib/polkit-kde-authentication-agent-1
-exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-exec-once = ulauncher --hide-window
-# exec-once = swaybg -i $HOME/Pictures/wallpaper.png
 
+# Layout ABNT
 input {
     kb_layout = br
-    follow_mouse = 1
-    touchpad { natural_scroll = no }
-    sensitivity = 0
-}
-general {
-    gaps_in = 5
-    gaps_out = 10
-    border_size = 2
-    col.active_border = rgba(33ccffee) rgba(00ff99ee) 45deg
-    col.inactive_border = rgba(595959aa)
-    layout = dwindle
-    cursor_inactive_timeout = 5
-}
-decoration {
-    rounding = 5
-    blur {
-        enabled = true
-        size = 5
-        passes = 2
-        new_optimizations = true
-    }
-    drop_shadow = yes
-    shadow_range = 10
-    shadow_render_power = 3
-    col.shadow = rgba(1a1a1aee)
-}
-animations {
-    enabled = yes
-    bezier = myBezier, 0.05, 0.9, 0.1, 1.05
-    animation = windows, 1, 7, myBezier
-    animation = windowsOut, 1, 7, default, popin 80%
-    animation = border, 1, 10, default
-    animation = fade, 1, 7, default
-    animation = workspaces, 1, 6, default
-}
-dwindle {
-    pseudotile = yes
-    preserve_split = yes
-}
-master {
-    new_is_master = true
-}
-gestures {
-    workspace_swipe = false
 }
 
-# Atalhos de Teclado
+# Autostart
+exec-once = waybar
+exec-once = ulauncher --hide-window
+exec-once = /usr/lib/polkit-kde-authentication-agent-1
+
+# Atalhos
 \$mainMod = SUPER
 bind = \$mainMod, RETURN, exec, alacritty
-bind = \$mainMod, Q, killactive
-bind = \$mainMod, M, exit
 bind = \$mainMod, SPACE, exec, ulauncher --toggle-window
+bind = \$mainMod, D, exec, wofi --show drun
 bind = \$mainMod, E, exec, thunar
-bind = \$mainMod, V, togglefloating
-bind = \$mainMod, left, movefocus, l
-bind = \$mainMod, right, movefocus, r
-bind = \$mainMod, up, movefocus, u
-bind = \$mainMod, down, movefocus, d
-bind = \$mainMod, 1, workspace, 1
-bind = \$mainMod, 2, workspace, 2
-bind = \$mainMod, 3, workspace, 3
-bind = \$mainMod, 4, workspace, 4
-bind = \$mainMod, 5, workspace, 5
-bind = \$mainMod SHIFT, 1, movetoworkspace, 1
-bind = \$mainMod SHIFT, 2, movetoworkspace, 2
-bind = \$mainMod SHIFT, 3, movetoworkspace, 3
-bind = \$mainMod SHIFT, 4, movetoworkspace, 4
-bind = \$mainMod SHIFT, 5, movetoworkspace, 5
-bindle = , XF86AudioRaiseVolume, exec, wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+
-bindle = , XF86AudioLowerVolume, exec, wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%-
-bindl = , XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
-bindle = , XF86MonBrightnessUp, exec, brightnessctl set +5%
-bindle = , XF86MonBrightnessDown, exec, brightnessctl set 5%-
-bind = , PRINT, exec, grim -g "\$(slurp)" - | wl-copy
-bind = \$mainMod, P, exec, grim -g "\$(slurp)" - | wl-copy
+bind = \$mainMod, Q, killactive, 
+bind = \$mainMod, M, exit, 
 EOF
-        success "Configuração rica do hyprland.conf criada."
-    else
-        msg "hyprland.conf já existe. Adicionando 'source' da NVIDIA (se necessário)..."
-        if lspci | grep -i nvidia &> /dev/null; then
-            if ! grep -qF "$ENV_VAR_LINE" "$HYPR_CONFIG_FILE"; then
-                sed -i "1i$ENV_VAR_LINE" "$HYPR_CONFIG_FILE"
-                success "Linha 'source' adicionada ao $HYPR_CONFIG_FILE."
-            fi
-        fi
-    fi
-
-    # Configuração do Bootloader para NVIDIA
-    if lspci | grep -i nvidia &> /dev/null; then
-        msg "Configurando Bootloader para NVIDIA..."
-        
-        if [ -d /boot/loader/entries ]; then
-            msg "Detectado systemd-boot. Configurando..."
-            local ENTRY_FILE
-            ENTRY_FILE=$(find /boot/loader/entries/ -name "*arch*.conf" | head -n 1)
-            
-            if [ -z "$ENTRY_FILE" ]; then
-                ENTRY_FILE=$(find /boot/loader/entries/ -name "*.conf" | head -n 1)
-            fi
-            
-            if [ -n "$ENTRY_FILE" ]; then
-                if ! grep -q "nvidia_drm.modeset=1" "$ENTRY_FILE"; then
-                    sudo sed -i '/^options/ s/$/ nvidia_drm.modeset=1/' "$ENTRY_FILE"
-                    success "Parâmetro NVIDIA adicionado a $ENTRY_FILE."
-                else
-                    success "Parâmetro NVIDIA já existe em $ENTRY_FILE."
-                fi
-            else
-                error "Não foi possível encontrar um arquivo .conf em /boot/loader/entries/."
-            fi
-        
-        elif [ -f /etc/default/grub ]; then
-            msg "Detectado GRUB. Configurando..."
-            
-            if ! grep -q "nvidia_drm.modeset=1" /etc/default/grub; then
-                sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*/& nvidia_drm.modeset=1/' /etc/default/grub
-            fi
-            sudo grub-mkconfig -o /boot/grub/grub.cfg
-            success "GRUB atualizado."
-        else
-            warning "Não foi possível detectar GRUB ou systemd-boot."
-        fi
-    fi
+    success "Configuração do Hyprland aplicada."
 }
 
-# --- 8. Prompt Pós-Instalação (NÃO INTERATIVO) ---
-post_install_prompts() {
-    success "Instalação principal (v9) concluída!"
-    msg "O sistema está quase pronto."
-    msg "A limpeza do sudo será executada agora."
-    msg "O wrapper irá limpar o .bash_profile."
+# --- 8. CONFIGURAR AUTO-LOGIN GRÁFICO ---
+setup_autologin() {
+    msg "A configurar o .bash_profile para iniciar o Hyprland automaticamente no TTY1..."
     
-    # v9: REBOOT AUTOMÁTICO
-    msg "O sistema será reiniciado em 10 segundos para finalizar."
-    sleep 10
-    sudo reboot
+    # Garante que o ficheiro exista
+    touch ~/.bash_profile
+    
+    # Adiciona a lógica ao .bash_profile (se já não existir)
+    if ! grep -q "exec Hyprland" ~/.bash_profile; then
+        cat <<EOF >> ~/.bash_profile
+
+# --- Iniciar Hyprland automaticamente no TTY1 ---
+if [[ -z \$DISPLAY ]] && [[ \$(tty) == /dev/tty1 ]]; then
+    exec Hyprland
+fi
+EOF
+    fi
+    success "Auto-login gráfico configurado."
 }
 
 # --- Execução Principal ---
 main() {
-    setup_aur_helper
-    setup_base
-    setup_nvidia_pkgs
+    # 'set -e' para parar se algo crítico (rede, yay) falhar
+    set -e
+    setup_network
+    setup_yay
+    setup_base_env
+    setup_nvidia
+    
+    # 'set +e' para permitir que a instalação de apps continue
+    # mesmo que um pacote falhe (ex: VSCode time-out)
+    set +e
     setup_dev_env
     setup_apps
-    configure_system
-    post_install_prompts
+    
+    # 'set -e' novamente para a configuração final
+    set -e
+    configure_hyprland
+    setup_autologin
+    
+    success "INSTALAÇÃO CONCLUÍDA!"
+    warning "Lembre-se de fazer as configurações manuais:"
+    echo "1. (Docker) Faça logout/login para que o grupo 'docker' tenha efeito."
+    echo "2. (Rust) Execute 'rustup toolchain install stable'."
+    echo "3. (1Password) Execute 'op signin'."
+    echo "4. (Rclone) Execute 'rclone config'."
+    
+    msg "O sistema irá reiniciar em 10 segundos..."
+    sleep 10
+    sudo reboot
 }
 
+# Inicia o script
 main
